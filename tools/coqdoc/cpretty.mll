@@ -857,6 +857,11 @@ and doc indents = parse
       { if !Cdglobals.plain_comments then Output.char '_' else stop_emph () ;
         Output.char (lexeme_char lexbuf 1);
         doc indents lexbuf }
+  | "＿"
+      { if !Cdglobals.plain_comments
+        then Output.char '_'
+        else if in_emph () then stop_emph () else start_emph ();
+        doc indents lexbuf }
   | "<<" space*
       { Output.start_verbatim true; verbatim true lexbuf; doc_bol lexbuf }
   | '"'
@@ -876,16 +881,30 @@ and doc indents = parse
 and escaped_math_latex = parse
   | "$" { Output.stop_latex_math () }
   | eof { Output.stop_latex_math () }
+  | "(*" { Output.latex_char (lexeme_char lexbuf 0); Output.latex_char (lexeme_char lexbuf 1); escaped_math_latex_comment lexbuf; escaped_math_latex lexbuf }
   | "*)"
         { Output.stop_latex_math (); backtrack lexbuf }
   | _   { Output.latex_char (lexeme_char lexbuf 0); escaped_math_latex lexbuf }
 
+and escaped_math_latex_comment = parse
+  | "(*" { Output.latex_char (lexeme_char lexbuf 0); Output.latex_char (lexeme_char lexbuf 1); escaped_math_latex_comment lexbuf; escaped_math_latex_comment lexbuf }
+  | "*)" { Output.latex_char (lexeme_char lexbuf 0); Output.latex_char (lexeme_char lexbuf 1) }
+  | eof { () }
+  | _ { Output.latex_char (lexeme_char lexbuf 0); escaped_math_latex_comment lexbuf }
+
 and escaped_latex = parse
   | "%" { () }
   | eof { () }
+  | "(*" { Output.latex_char (lexeme_char lexbuf 0); Output.latex_char (lexeme_char lexbuf 1); escaped_latex_comment lexbuf; escaped_latex lexbuf }
   | "*)"
         { backtrack lexbuf }
   | _   { Output.latex_char (lexeme_char lexbuf 0); escaped_latex lexbuf }
+
+and escaped_latex_comment = parse
+  | "(*" { Output.latex_char (lexeme_char lexbuf 0); Output.latex_char (lexeme_char lexbuf 1); escaped_latex_comment lexbuf; escaped_latex_comment lexbuf }
+  | "*)" { Output.latex_char (lexeme_char lexbuf 0); Output.latex_char (lexeme_char lexbuf 1) }
+  | eof { () }
+  | _ { Output.latex_char (lexeme_char lexbuf 0); escaped_latex_comment lexbuf }
 
 and escaped_html = parse
   | "#" { () }
@@ -894,17 +913,31 @@ and escaped_html = parse
   | "##"
         { Output.html_char '#'; escaped_html lexbuf }
   | eof { () }
+  | "(*" { Output.html_char (lexeme_char lexbuf 0); Output.html_char (lexeme_char lexbuf 1); escaped_html_comment lexbuf; escaped_html lexbuf }
   | "*)"
         { backtrack lexbuf }
   | _   { Output.html_char (lexeme_char lexbuf 0); escaped_html lexbuf }
+
+and escaped_html_comment = parse
+  | "(*" { Output.html_char (lexeme_char lexbuf 0); Output.html_char (lexeme_char lexbuf 1); escaped_html_comment lexbuf; escaped_html_comment lexbuf }
+  | "*)" { Output.html_char (lexeme_char lexbuf 0); Output.html_char (lexeme_char lexbuf 1) }
+  | eof { () }
+  | _ { Output.html_char (lexeme_char lexbuf 0); escaped_html_comment lexbuf }
 
 and verbatim inline = parse
   | nl ">>" space* nl { Output.verbatim_char inline '\n'; Output.stop_verbatim inline }
   | nl ">>" { Output.verbatim_char inline '\n'; Output.stop_verbatim inline }
   | ">>" { Output.stop_verbatim inline }
+  | "(*" { Output.verbatim_char inline (lexeme_char lexbuf 0); Output.verbatim_char inline (lexeme_char lexbuf 1); verbatim_comment inline lexbuf; verbatim inline lexbuf }
   | "*)" { Output.stop_verbatim inline; backtrack lexbuf }
   | eof { Output.stop_verbatim inline }
   | _ { Output.verbatim_char inline (lexeme_char lexbuf 0); verbatim inline lexbuf }
+
+and verbatim_comment inline = parse
+  | "(*" { Output.verbatim_char inline (lexeme_char lexbuf 0); Output.verbatim_char inline (lexeme_char lexbuf 1); verbatim_comment inline lexbuf; verbatim_comment inline lexbuf }
+  | "*)" { Output.verbatim_char inline (lexeme_char lexbuf 0); Output.verbatim_char inline (lexeme_char lexbuf 1) }
+  | eof { () }
+  | _ { Output.verbatim_char inline (lexeme_char lexbuf 0); verbatim_comment inline lexbuf }
 
 and url = parse
   | "}}" { Output.url (Buffer.contents url_buffer) None; Buffer.clear url_buffer }
